@@ -20,6 +20,11 @@ jobs:
       - run: pnpm typecheck
       - name: Typecheck SDK
         run: pnpm --filter @buildpilot/sdk typecheck
+      - name: Build SDK
+        # mcp-server imports @buildpilot/sdk's compiled output (package.json
+        # main/types point at dist/), so it must be built before mcp-server
+        # can typecheck, not just have its own source typecheck cleanly.
+        run: pnpm --filter @buildpilot/sdk build
       - name: Typecheck MCP server
         run: pnpm --filter @buildpilot/mcp-server typecheck
 
