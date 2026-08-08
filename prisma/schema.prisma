@@ -1,0 +1,468 @@
+// BuildPilot data model.
+// Dev/demo runs on SQLite (zero-infra, $0, clone-and-run). Column types are kept
+// Postgres-compatible (String ids, ISO datetimes, JSON strings instead of native
+// arrays/enums-with-values) so this schema ports to `provider = "postgresql""
+// against Supabase with only the datasource block changing. See docs/DATABASE.md.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ============================================================
+// Tenancy & identity
+// ============================================================
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  demo      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members      Membership[]
+  repositories Repository[]
+  auditLogs    AuditLog[]
+
+  @@map("organizations")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships Membership[]
+  auditLogs   AuditLog[]
+
+  @@map("users")
+}
+
+// Role-based access control, scoped per organization.
+model Membership {
+  id             String   @id @default(cuid())
+  role           String   @default("member") // owner | admin | member | viewer
+  organizationId String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+// ============================================================
+// Repository & CI provider connections
+// ============================================================
+
+model Repository {
+  id             String   @id @default(cuid())
+  organizationId String
+  provider       String // github | gitlab | circleci
+  externalId     String // provider-native repo id
+  owner          String
+  name           String
+  defaultBranch  String   @default("main")
+  private        Boolean  @default(true)
+  demo           Boolean  @default(false)
+
+  // Least-privilege connection metadata. Never store raw tokens here —
+  // see docs/SECURITY.md; installationId/credentialRef point at the
+  // encrypted credential store.
+  installationId String?
+  credentialRef  String?
+
+  // Repo analysis snapshot (package manager, build/test config, deploy config).
+  analysis Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branches      Branch[]
+  commits       Commit[]
+  pullRequests  PullRequest[]
+  workflows     Workflow[]
+  workflowRuns  WorkflowRun[]
+  deployments   Deployment[]
+  events        Event[]
+  flakyTests    FlakyTestScore[]
+  recommendations Recommendation[]
+
+  @@unique([provider, externalId])
+  @@index([organizationId])
+  @@map("repositories")
+}
+
+model Branch {
+  id           String  @id @default(cuid())
+  repositoryId String
+  name         String
+  isDefault    Boolean @default(false)
+
+  repository   Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  workflowRuns WorkflowRun[]
+
+  @@unique([repositoryId, name])
+  @@map("branches")
+}
+
+model Commit {
+  id           String   @id @default(cuid())
+  repositoryId String
+  sha          String
+  message      String
+  authorName   String?
+  authorEmail  String?
+  // JSON string array of changed file paths.
+  changedFiles String   @default("[]")
+  committedAt  DateTime
+
+  repository   Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  workflowRuns WorkflowRun[]
+  pullRequests PullRequest[]
+
+  @@unique([repositoryId, sha])
+  @@index([repositoryId, committedAt])
+  @@map("commits")
+}
+
+model PullRequest {
+  id           String   @id @default(cuid())
+  repositoryId String
+  number       Int
+  title        String
+  authorLogin  String?
+  state        String // open | closed | merged
+  headCommitId String?
+  baseBranch   String
+  headBranch   String
+  // AI-generated risk summary: { ciImpact, testsAffected, riskLevel, dependencyChanges, notes }
+  riskSummary  Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  repository   Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  headCommit   Commit?       @relation(fields: [headCommitId], references: [id])
+  workflowRuns WorkflowRun[]
+
+  @@unique([repositoryId, number])
+  @@index([repositoryId, state])
+  @@map("pull_requests")
+}
+
+// ============================================================
+// CI: workflows, runs, jobs, steps, tests
+// ============================================================
+
+model Workflow {
+  id           String  @id @default(cuid())
+  repositoryId String
+  provider     String // github | gitlab | circleci
+  externalId   String
+  name         String
+  path         String? // e.g. .github/workflows/ci.yml
+  // Raw provider-native workflow/pipeline definition, for the CI optimizer.
+  definition   String?
+
+  repository Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  runs       WorkflowRun[]
+
+  @@unique([repositoryId, provider, externalId])
+  @@map("workflows")
+}
+
+model WorkflowRun {
+  id             String    @id @default(cuid())
+  repositoryId   String
+  workflowId     String
+  branchId       String?
+  commitId       String?
+  pullRequestId  String?
+  externalId     String
+  runNumber      Int
+  status         String // queued | in_progress | completed
+  conclusion     String? // success | failure | cancelled | timed_out | skipped
+  triggeredBy    String? // developer login/email
+  event          String? // push | pull_request | schedule | manual
+  queuedAt       DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  durationMs     Int?
+  queueTimeMs    Int?
+
+  repository  Repository   @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  workflow    Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  branch      Branch?      @relation(fields: [branchId], references: [id])
+  commit      Commit?      @relation(fields: [commitId], references: [id])
+  pullRequest PullRequest? @relation(fields: [pullRequestId], references: [id])
+  jobs        Job[]
+  failures    Failure[]
+  aiAnalyses  AIAnalysis[]
+
+  @@unique([repositoryId, workflowId, externalId])
+  @@index([repositoryId, status, conclusion])
+  @@index([repositoryId, completedAt])
+  @@map("workflow_runs")
+}
+
+model Job {
+  id            String    @id @default(cuid())
+  workflowRunId String
+  externalId    String
+  name          String
+  status        String
+  conclusion    String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  durationMs    Int?
+  runnerLabel   String?
+  // JSON string array of cache-key hits/misses for build-performance analysis.
+  cacheInfo     Json?
+
+  workflowRun WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  steps       Step[]
+  tests       TestResult[]
+  failures    Failure[]
+
+  @@unique([workflowRunId, externalId])
+  @@index([workflowRunId])
+  @@map("jobs")
+}
+
+model Step {
+  id          String    @id @default(cuid())
+  jobId       String
+  name        String
+  number      Int
+  status      String
+  conclusion  String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  durationMs  Int?
+  // Redacted log excerpt (secret redaction applied before persistence).
+  logExcerpt  String?
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, number])
+  @@map("steps")
+}
+
+// Individual test case results, the raw substrate for flaky-test detection.
+model TestResult {
+  id         String   @id @default(cuid())
+  jobId      String
+  suite      String?
+  name       String
+  fullName   String // suite + name, stable identity across runs
+  status     String // passed | failed | skipped
+  durationMs Int?
+  message    String?
+  ranAt      DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([fullName])
+  @@index([jobId])
+  @@map("test_results")
+}
+
+// Aggregated, incrementally-updated flaky score per test identity.
+// Kept separate from raw TestResult rows so scoring evidence thresholds
+// (see docs/FLAKY_DETECTION.md) are auditable independent of the score.
+model FlakyTestScore {
+  id             String   @id @default(cuid())
+  repositoryId   String
+  fullName       String
+  totalRuns      Int      @default(0)
+  failCount      Int      @default(0)
+  passCount      Int      @default(0)
+  // alternating pass/fail on the same commit is the strongest flaky signal
+  transitionCount Int     @default(0)
+  score          Float    @default(0) // 0..1, see scoring/flaky.ts
+  isFlaky        Boolean  @default(false) // only true once evidence threshold met
+  lastFailureAt  DateTime?
+  avgDurationMs  Int?
+  // JSON string array of branch names this test has failed on.
+  affectedBranches String @default("[]")
+  updatedAt      DateTime @updatedAt
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, fullName])
+  @@index([repositoryId, isFlaky])
+  @@map("flaky_test_scores")
+}
+
+// ============================================================
+// Failures & AI analysis
+// ============================================================
+
+model Failure {
+  id            String   @id @default(cuid())
+  workflowRunId String
+  jobId         String?
+  category      String? // dependency | test | timeout | oom | syntax | config | infra | flaky | unknown
+  errorMessage  String?
+  // Redacted stack trace / log excerpt used as AI analysis evidence.
+  evidence      String?
+  createdAt     DateTime @default(now())
+
+  workflowRun WorkflowRun  @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  job         Job?         @relation(fields: [jobId], references: [id])
+  aiAnalyses  AIAnalysis[]
+
+  @@index([workflowRunId])
+  @@index([category])
+  @@map("failures")
+}
+
+model AIAnalysis {
+  id            String   @id @default(cuid())
+  workflowRunId String
+  failureId     String?
+  provider      String // "local-deterministic" | "openrouter:<model>"
+  rootCause     String
+  whyItFailed   String
+  whatChanged   String?
+  likelyFix     String
+  confidence    Float // 0..1
+  // JSON string array of { file, reason } evidence citations — never fabricated,
+  // always derived from parsed logs/diffs. See docs/AI_SAFETY.md.
+  relevantFiles String   @default("[]")
+  evidence      String   @default("[]")
+  recommendedAction String?
+  createdAt     DateTime @default(now())
+
+  workflowRun     WorkflowRun      @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  failure         Failure?         @relation(fields: [failureId], references: [id])
+  recommendations Recommendation[]
+
+  @@index([workflowRunId])
+  @@map("ai_analyses")
+}
+
+// Proposed fixes (CI config, dependency, build config). Always diff-based,
+// always requires explicit user approval before application — see docs/CI_OPTIMIZER.md.
+model Recommendation {
+  id           String   @id @default(cuid())
+  repositoryId String
+  aiAnalysisId String?
+  kind         String // caching | parallelization | matrix | dependency | test-split | config | docker
+  title        String
+  description  String
+  diff         String? // unified diff, proposed not applied
+  filePath     String?
+  status       String   @default("proposed") // proposed | approved | applied | rejected
+  impactEstimate Json? // { metric: "buildDurationMs", before, after }
+  createdAt    DateTime @default(now())
+  decidedAt    DateTime?
+  decidedBy    String?
+
+  repository Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  aiAnalysis AIAnalysis? @relation(fields: [aiAnalysisId], references: [id])
+
+  @@index([repositoryId, status])
+  @@map("recommendations")
+}
+
+// ============================================================
+// Deployments
+// ============================================================
+
+model Deployment {
+  id           String    @id @default(cuid())
+  repositoryId String
+  workflowRunId String?
+  environment  String // production | staging | preview
+  status       String // pending | in_progress | success | failure | rolled_back
+  version      String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  durationMs   Int?
+  isRollback   Boolean   @default(false)
+  rolledBackFromId String?
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId, environment, status])
+  @@map("deployments")
+}
+
+// ============================================================
+// Events (webhook ingestion pipeline)
+// ============================================================
+
+// Every ingested webhook, kept for idempotency + audit + replay.
+model Event {
+  id             String   @id @default(cuid())
+  repositoryId   String?
+  provider       String // github | gitlab | circleci
+  type           String // e.g. workflow_run, push, pull_request
+  // Provider's own delivery/event id — the idempotency key.
+  externalId     String
+  signatureValid Boolean
+  status         String   @default("received") // received | processing | processed | failed | duplicate
+  payload        Json
+  error          String?
+  receivedAt     DateTime @default(now())
+  processedAt    DateTime?
+
+  repository Repository? @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@index([status])
+  @@map("events")
+}
+
+// ============================================================
+// Background job queue (local durable substitute for Redis/Trigger.dev —
+// see src/lib/providers/queue). Durable across dev-server restarts because
+// it's backed by the same SQLite file as everything else, not memory.
+// ============================================================
+
+model QueueJob {
+  id          String    @id @default(cuid())
+  queue       String
+  payload     Json
+  status      String    @default("pending") // pending | processing | completed | failed
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  availableAt DateTime  @default(now())
+  lockedAt    DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([queue, status, availableAt])
+  @@map("queue_jobs")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String
+  targetType     String?
+  targetId       String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}

@@ -1,0 +1,10 @@
+name: Security vulnerability
+description: "STOP — do not file a public issue for security reports"
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Please do not report security vulnerabilities through public GitHub issues.**
+
+        Use the Security tab → "Report a vulnerability" for a private advisory, or see SECURITY.md for other reporting options.

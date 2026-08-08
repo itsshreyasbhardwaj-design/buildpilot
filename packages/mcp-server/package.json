@@ -1,0 +1,27 @@
+{
+  "name": "@buildpilot/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server exposing BuildPilot build/failure/flaky-test tools to AI agents",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "buildpilot-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@buildpilot/sdk": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
