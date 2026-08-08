@@ -74,7 +74,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm run pretest:e2e
+      # pretest:e2e (migrate/seed/build against prisma/e2e.db) runs
+      # automatically as pnpm's pre-hook for test:e2e — do not also run it
+      # explicitly here, or seeding runs twice against the same database.
       - run: pnpm test:e2e
 
   benchmark:
