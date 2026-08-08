@@ -38,9 +38,27 @@ the likely fix, a calibrated confidence score, and every piece of evidence
 cited — line numbers, matched log text, correlated changed files, prior
 occurrences.
 
-*(Screenshots: run `pnpm dev`, seed the demo workspace, and look — see
-[Quickstart](#quickstart) below. This is a fresh v0.1 release; rendered
-screenshots will be added to this README as the project gets real usage.)*
+![Failure timeline and AI analysis for a failed build](docs/screenshots/failure-analysis.png)
+
+<details>
+<summary>More screenshots — dashboard, CI Optimizer, flaky tests</summary>
+
+**Dashboard** — build health across every connected repository:
+
+![BuildPilot dashboard showing success rate, failure rate, recent builds, and flaky test/recommendation counts](docs/screenshots/dashboard.png)
+
+**Recommendations** — CI Optimizer findings, each a real diff against a real workflow file, approved or rejected explicitly:
+
+![CI Optimizer recommendations with diffs for matrix strategy and dependency caching](docs/screenshots/recommendations.png)
+
+**Flaky tests** — scored from real pass/fail transition history, not guessed:
+
+![Flaky tests table with score, fail/total, transitions, and last failure](docs/screenshots/flaky-tests.png)
+
+</details>
+
+All four screenshots are of the demo workspace (`pnpm db:seed`) running a
+production build — nothing staged or mocked for the README.
 
 ### Example failure analysis
 
