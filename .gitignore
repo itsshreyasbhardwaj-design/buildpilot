@@ -50,3 +50,10 @@ prisma/e2e.db*
 /blob-report
 packages/sdk/dist
 packages/mcp-server/dist
+
+# Security hardening: secret-shaped files, none currently present
+*.key
+credentials*.json
+service-account*.json
+*.log
+*.sqlite

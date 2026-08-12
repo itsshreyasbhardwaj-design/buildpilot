@@ -6,6 +6,15 @@
 // docs/ROADMAP.md. What's here is genuinely enforced (wrong or missing
 // token is rejected), just not yet self-service.
 
+import { createHash, timingSafeEqual } from "node:crypto";
+
+/** Constant-time string compare (hash first so length itself can't leak). */
+function safeCompare(a: string, b: string): boolean {
+  const bufA = createHash("sha256").update(a).digest();
+  const bufB = createHash("sha256").update(b).digest();
+  return timingSafeEqual(bufA, bufB);
+}
+
 interface TokenEntry {
   token: string;
   organizationId: string;
@@ -29,6 +38,6 @@ export function resolveApiToken(authorizationHeader: string | null): { organizat
   const token = authorizationHeader.slice("Bearer ".length).trim();
   if (!token) return null;
 
-  const entry = parseTokens().find((e) => e.token === token);
+  const entry = parseTokens().find((e) => safeCompare(e.token, token));
   return entry ? { organizationId: entry.organizationId } : null;
 }
