@@ -1,0 +1,73 @@
+# gitleaks allowlist — audited exceptions only.
+#
+# Every fingerprint below was inspected during an account-wide security audit
+# and confirmed to be a deliberate test fixture, an example in documentation,
+# a redaction/secret-scanning test's own input, or vendored upstream code.
+# None is a live credential.
+#
+# This file lists FINGERPRINTS, not paths or rules, on purpose: a fingerprint
+# pins one specific finding at one location. A NEW secret added to any of the
+# same files still fails the scan. Do not replace these with path globs.
+#
+# If a finding here ever turns out to be real, delete its line rather than
+# editing it, so the scanner reports it again.
+
+# src/app/api/webhooks/[provider]/route.test.ts  [aws-access-token]
+src/app/api/webhooks/[provider]/route.test.ts:aws-access-token:117
+
+# src/app/api/webhooks/[provider]/route.test.ts  [aws-access-token]
+src/app/api/webhooks/[provider]/route.test.ts:aws-access-token:127
+
+# src/app/api/webhooks/[provider]/route.test.ts  [aws-access-token]
+04a869461f84bfca48f9378938cb839c565687d5:src/app/api/webhooks/[provider]/route.test.ts:aws-access-token:117
+
+# src/app/api/webhooks/[provider]/route.test.ts  [aws-access-token]
+04a869461f84bfca48f9378938cb839c565687d5:src/app/api/webhooks/[provider]/route.test.ts:aws-access-token:127
+
+# src/lib/security/redact.test.ts  [stripe-access-token]
+src/lib/security/redact.test.ts:stripe-access-token:18
+
+# src/lib/security/redact.test.ts  [stripe-access-token]
+src/lib/security/redact.test.ts:stripe-access-token:20
+
+# src/lib/security/redact.test.ts  [aws-access-token]
+src/lib/security/redact.test.ts:aws-access-token:6
+
+# src/lib/security/redact.test.ts  [aws-access-token]
+src/lib/security/redact.test.ts:aws-access-token:7
+
+# src/lib/security/redact.test.ts  [aws-access-token]
+src/lib/security/redact.test.ts:aws-access-token:50
+
+# src/lib/security/redact.test.ts  [aws-access-token]
+src/lib/security/redact.test.ts:aws-access-token:63
+
+# src/lib/security/redact.test.ts  [aws-access-token]
+src/lib/security/redact.test.ts:aws-access-token:65
+
+# src/lib/security/redact.test.ts  [curl-auth-header]
+src/lib/security/redact.test.ts:curl-auth-header:18
+
+# src/lib/security/redact.test.ts  [stripe-access-token]
+04a869461f84bfca48f9378938cb839c565687d5:src/lib/security/redact.test.ts:stripe-access-token:18
+
+# src/lib/security/redact.test.ts  [stripe-access-token]
+04a869461f84bfca48f9378938cb839c565687d5:src/lib/security/redact.test.ts:stripe-access-token:20
+
+# src/lib/security/redact.test.ts  [aws-access-token]
+04a869461f84bfca48f9378938cb839c565687d5:src/lib/security/redact.test.ts:aws-access-token:6
+
+# src/lib/security/redact.test.ts  [aws-access-token]
+04a869461f84bfca48f9378938cb839c565687d5:src/lib/security/redact.test.ts:aws-access-token:7
+
+# src/lib/security/redact.test.ts  [aws-access-token]
+04a869461f84bfca48f9378938cb839c565687d5:src/lib/security/redact.test.ts:aws-access-token:50
+
+# src/lib/security/redact.test.ts  [aws-access-token]
+04a869461f84bfca48f9378938cb839c565687d5:src/lib/security/redact.test.ts:aws-access-token:63
+
+# src/lib/security/redact.test.ts  [aws-access-token]
+04a869461f84bfca48f9378938cb839c565687d5:src/lib/security/redact.test.ts:aws-access-token:65
+
+# src/lib/security/redact.test.ts  [curl-auth-header]
+04a869461f84bfca48f9378938cb839c565687d5:src/lib/security/redact.test.ts:curl-auth-header:18
